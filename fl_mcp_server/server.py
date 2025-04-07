@@ -28,6 +28,7 @@ logger.info(f"Python version: {sys.version}")
 logger.info(f"Current working directory: {os.getcwd()}")
 
 
+
 # --- FL Studio Connection Class ---
 @dataclass
 class FLStudioConnection:
@@ -227,6 +228,21 @@ mcp = FastMCP(
     description="Provides tools to interact with Image-Line FL Studio.",
     lifespan=server_lifespan # Use the lifespan manager
 )
+
+@mcp.method("initialize")
+def initialize(ctx: Context, params: Dict[str, Any]) -> Dict[str, Any]:
+    logger.info("Received initialize request from Claude")
+    return {
+        "jsonrpc": "2.0",
+        "id": params.get("id"),
+        "result": {
+            "capabilities": {},
+            "serverInfo": {
+                "name": "FLStudioMCP",
+                "version": "0.1.0"
+            }
+        }
+    }
 
 # --- Tool Definitions ---
 # Decorate functions to expose them as tools via MCP

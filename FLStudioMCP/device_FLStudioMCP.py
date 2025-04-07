@@ -155,7 +155,9 @@ def process_command(command):
     # Wrap FL Studio API calls in try-except blocks
     try:
         # --- Add Command Handlers Here ---
-        if command_type == "get_session_info":
+        if command_type == "test_connection":
+            response["result"] = {"message": "Connection successful"}
+        elif command_type == "get_session_info":
             response["result"] = get_session_info_handler()
         elif command_type == "get_track_info":
             response["result"] = get_track_info_handler(params)
@@ -196,7 +198,6 @@ def process_command(command):
 
     except Exception as e:
         log_message(f"Error processing command '{command_type}': {e}")
-        log_message(traceback.format_exc())
         response["status"] = "error"
         response["message"] = str(e)
 
@@ -404,35 +405,30 @@ def OnInit():
     global server_thread, stop_server_flag
     log_message("Initializing...")
     stop_server_flag.clear()
-    # Start the server thread
+    # Start the server thread without daemon setting
     server_thread = threading.Thread(target=start_listening_server)
-    server_thread.daemon = True
     server_thread.start()
     log_message("Script Initialized. Ready for MCP connection.")
-    # Set a default device name (can be overridden by # name= line)
-    # device.setName("FL Studio MCP Script") # Handled by #name=
-    return 0 # Indicate success
+    return 0
 
 def OnDeInit():
     """Called when the script is about to be unloaded."""
     global server_thread, stop_server_flag, server_socket, client_handler_thread
     log_message("Deinitializing...")
-    stop_server_flag.set() # Signal threads to stop
+    stop_server_flag.set()
 
-    # Close server socket to interrupt accept()
     if server_socket:
         try:
             server_socket.close()
         except Exception as e:
-             log_message(f"Error closing server socket: {e}")
+            log_message(f"Error closing server socket: {e}")
 
-    # Wait for threads to finish
     if server_thread and server_thread.is_alive():
         log_message("Waiting for server thread to stop...")
         server_thread.join(timeout=2.0)
     if client_handler_thread and client_handler_thread.is_alive():
-         log_message("Waiting for client handler thread to stop...")
-         client_handler_thread.join(timeout=2.0)
+        log_message("Waiting for client handler thread to stop...")
+        client_handler_thread.join(timeout=2.0)
 
     log_message("Script Deinitialized.")
     return 0
