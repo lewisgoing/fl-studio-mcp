@@ -9,6 +9,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
 logger = logging.getLogger('flstudio-mcp')
 
 # Initialize MCP server
@@ -16,6 +17,7 @@ mcp = FastMCP("flstudio-mcp")
 
 # MIDI port handling
 output_port = None
+
 try:
     available_ports = mido.get_output_names()
     logger.info(f"Available MIDI ports: {available_ports}")
@@ -83,14 +85,14 @@ def send_command(command_type, params=None, wait_for_feedback=True):
                         midi_value = min(127, max(0, value))
                     
                     output_port.send(mido.Message('control_change', control=param_cc, value=midi_value))
-                    time.sleep(0.01)  # Small delay between parameters
+                    time.sleep(0.01) # Small delay between parameters
         
         # Command end
         output_port.send(mido.Message('control_change', control=126, value=127))
         
         # TODO: Implement feedback listening mechanism if wait_for_feedback is True
-        
         return {"status": "success", "command": command_type, "params": params}
+    
     except Exception as e:
         logger.error(f"Error sending command: {e}")
         return {"status": "error", "message": str(e)}
@@ -112,7 +114,6 @@ def play_note(note: int, velocity: int = 100, duration: float = 0.5) -> Dict[str
     """Play a single MIDI note."""
     if not 0 <= note <= 127:
         return {"status": "error", "message": "Note must be between 0 and 127"}
-    
     if not 0 <= velocity <= 127:
         return {"status": "error", "message": "Velocity must be between 0 and 127"}
     
@@ -135,16 +136,15 @@ def create_track(name: str = "New Track", track_type: str = "instrument") -> Dic
     """Create a new track in FL Studio with proper instrument loading."""
     try:
         # Map track type to value
-        type_value = 0  # Default (instrument)
+        type_value = 0 # Default (instrument)
         if track_type.lower() == "audio":
             type_value = 1
         elif track_type.lower() == "automation":
             type_value = 2
-            
+        
         # Send command to create track
         result = send_command(2, {"type": type_value})
         logger.info(f"Created track: {result}")
-        
         return result
     except Exception as e:
         logger.error(f"Error creating track: {e}")
@@ -155,7 +155,7 @@ def load_instrument(instrument_name: str, channel: int = None) -> Dict[str, Any]
     """Load an instrument into the selected or specified channel."""
     try:
         # Map instrument name to type
-        instrument_value = 0  # Default
+        instrument_value = 0 # Default
         if "piano" in instrument_name.lower():
             instrument_value = 1
         elif "bass" in instrument_name.lower():
@@ -168,11 +168,10 @@ def load_instrument(instrument_name: str, channel: int = None) -> Dict[str, Any]
         params = {"instrument": instrument_value}
         if channel is not None:
             params["track"] = channel
-            
+        
         # Send command to load instrument
         result = send_command(3, params)
         logger.info(f"Loaded instrument: {result}")
-        
         return result
     except Exception as e:
         logger.error(f"Error loading instrument: {e}")
@@ -186,12 +185,11 @@ def set_tempo(bpm: int) -> Dict[str, Any]:
             return {"status": "error", "message": "BPM must be between 50 and 999"}
         
         # Convert to MIDI value range
-        bpm_adjusted = min(127, max(0, bpm - 50))  # 50-177 BPM mapped to 0-127
+        bpm_adjusted = min(127, max(0, bpm - 50)) # 50-177 BPM mapped to 0-127
         
         # Send command to set tempo
         result = send_command(4, {"pattern": bpm_adjusted})
         logger.info(f"Set tempo to {bpm} BPM")
-        
         return result
     except Exception as e:
         logger.error(f"Error setting tempo: {e}")
@@ -202,7 +200,7 @@ def control_transport(action: str = "toggle") -> Dict[str, Any]:
     """Control transport (play, stop, record)."""
     try:
         # Map action to value
-        action_value = 3  # Default (toggle)
+        action_value = 3 # Default (toggle)
         if action.lower() == "play":
             action_value = 0
         elif action.lower() == "stop":
@@ -218,13 +216,11 @@ def control_transport(action: str = "toggle") -> Dict[str, Any]:
                 output_port.send(mido.Message('control_change', control=119, value=127))
             elif action.lower() == "record":
                 output_port.send(mido.Message('control_change', control=117, value=127))
-            
-            time.sleep(0.05)  # Small delay
+            time.sleep(0.05) # Small delay
         
         # Then send command for complex handling
         result = send_command(5, {"action": action_value})
         logger.info(f"Transport control: {action}")
-        
         return result
     except Exception as e:
         logger.error(f"Error controlling transport: {e}")
@@ -237,17 +233,16 @@ def select_pattern(pattern: int) -> Dict[str, Any]:
         if not 0 <= pattern <= 999:
             return {"status": "error", "message": "Pattern must be between 0 and 999"}
         
-        pattern_adjusted = min(127, pattern)  # Limit to MIDI range
+        pattern_adjusted = min(127, pattern) # Limit to MIDI range
         
         # Try program change for direct selection first
         if output_port:
             output_port.send(mido.Message('program_change', program=pattern_adjusted))
-            time.sleep(0.05)  # Small delay
-            
+            time.sleep(0.05) # Small delay
+        
         # Then send command for complex handling (creates pattern if needed)
         result = send_command(6, {"pattern": pattern_adjusted})
         logger.info(f"Selected pattern {pattern}")
-        
         return result
     except Exception as e:
         logger.error(f"Error selecting pattern: {e}")
@@ -259,7 +254,6 @@ def set_mixer_level(track: int = 0, level: float = 0.78) -> Dict[str, Any]:
     try:
         if not 0 <= track <= 125:
             return {"status": "error", "message": "Track must be between 0 and 125"}
-        
         if not 0 <= level <= 1:
             return {"status": "error", "message": "Level must be between 0.0 and 1.0"}
         
@@ -269,12 +263,11 @@ def set_mixer_level(track: int = 0, level: float = 0.78) -> Dict[str, Any]:
             mixer_cc = 11 + track
             level_adjusted = int(level * 127)
             output_port.send(mido.Message('control_change', control=mixer_cc, value=level_adjusted))
-            time.sleep(0.05)  # Small delay
+            time.sleep(0.05) # Small delay
         
         # Send command for proper handling
         result = send_command(7, {"track": track, "value": int(level * 127)})
         logger.info(f"Set mixer track {track} level to {level}")
-        
         return result
     except Exception as e:
         logger.error(f"Error setting mixer level: {e}")
@@ -282,7 +275,7 @@ def set_mixer_level(track: int = 0, level: float = 0.78) -> Dict[str, Any]:
 
 @mcp.tool()
 def create_chord_progression(
-    progression: List[str], 
+    progression: List[str],
     octave: int = 4,
     pattern: Optional[int] = None
 ) -> Dict[str, Any]:
@@ -295,15 +288,15 @@ def create_chord_progression(
         
         # Define chord note offsets
         chord_types = {
-            "": [0, 4, 7],           # Major
-            "m": [0, 3, 7],          # Minor
-            "7": [0, 4, 7, 10],      # Dominant 7th
-            "maj7": [0, 4, 7, 11],   # Major 7th
-            "m7": [0, 3, 7, 10],     # Minor 7th
-            "dim": [0, 3, 6],        # Diminished
-            "aug": [0, 4, 8],        # Augmented
-            "sus4": [0, 5, 7],       # Suspended 4th
-            "sus2": [0, 2, 7],       # Suspended 2nd
+            "": [0, 4, 7], # Major
+            "m": [0, 3, 7], # Minor
+            "7": [0, 4, 7, 10], # Dominant 7th
+            "maj7": [0, 4, 7, 11], # Major 7th
+            "m7": [0, 3, 7, 10], # Minor 7th
+            "dim": [0, 3, 6], # Diminished
+            "aug": [0, 4, 8], # Augmented
+            "sus4": [0, 5, 7], # Suspended 4th
+            "sus2": [0, 2, 7], # Suspended 2nd
         }
         
         # Define note values for each root
@@ -340,7 +333,7 @@ def create_chord_progression(
                     note = root_value + offset
                     if 0 <= note <= 127:
                         output_port.send(mido.Message('note_on', note=note, velocity=90))
-                        time.sleep(0.01)  # Small delay between notes
+                        time.sleep(0.01) # Small delay between notes
                 
                 # Let chord play for a moment before next chord
                 time.sleep(0.5)
@@ -350,8 +343,7 @@ def create_chord_progression(
                     note = root_value + offset
                     if 0 <= note <= 127:
                         output_port.send(mido.Message('note_off', note=note, velocity=0))
-                
-                time.sleep(0.1)  # Gap between chords
+                time.sleep(0.1) # Gap between chords
         
         return {"status": "success", "progression": progression}
     except Exception as e:
@@ -363,7 +355,7 @@ def add_audio_effect(track: int = 0, effect_type: str = "reverb") -> Dict[str, A
     """Add an audio effect to a mixer track."""
     try:
         # Map effect type to value
-        effect_value = 0  # Default (limiter)
+        effect_value = 0 # Default (limiter)
         if "reverb" in effect_type.lower():
             effect_value = 1
         elif "delay" in effect_type.lower():
@@ -376,7 +368,6 @@ def add_audio_effect(track: int = 0, effect_type: str = "reverb") -> Dict[str, A
         # Send command to add effect
         result = send_command(10, {"track": track, "instrument": effect_value})
         logger.info(f"Added {effect_type} effect to track {track}")
-        
         return result
     except Exception as e:
         logger.error(f"Error adding audio effect: {e}")
