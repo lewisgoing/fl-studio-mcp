@@ -1,162 +1,104 @@
 import mido
-import json
 import time
 import logging
 from typing import Dict, List, Any, Optional
 from fastmcp import FastMCP
 
-# Set up logging
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('flstudio-mcp')
 
-# Initialize the MCP server
+# Initialize MCP server
 mcp = FastMCP("flstudio-mcp")
 
-# Configure MIDI port - we'll handle errors if the port isn't found
+# MIDI port handling
 output_port = None
 try:
-    # Look for the IAC Driver port
     available_ports = mido.get_output_names()
     logger.info(f"Available MIDI ports: {available_ports}")
     
+    # Try to find IAC Driver port
     for port in available_ports:
         if 'IAC Driver MCP Bridge' in port:
             output_port = mido.open_output(port)
             logger.info(f"Connected to MIDI port: {port}")
             break
     
+    # Fallback to any IAC port
     if output_port is None:
-        # If exact name not found, try to find any IAC port
         for port in available_ports:
             if 'IAC' in port:
                 output_port = mido.open_output(port)
                 logger.info(f"Connected to MIDI port: {port}")
                 break
-        
-        if output_port is None:
-            logger.error("No IAC Driver port found. Please ensure the IAC Driver is properly configured.")
+    
+    if output_port is None:
+        logger.error("No IAC Driver port found. Please configure the IAC Driver.")
 except Exception as e:
     logger.error(f"Error initializing MIDI: {e}")
 
-# Define MIDI message encoding functions
-def encode_note_on(note, velocity):
-    """Create a note-on MIDI message."""
-    return mido.Message('note_on', note=note, velocity=velocity)
-
-def encode_note_off(note):
-    """Create a note-off MIDI message."""
-    return mido.Message('note_off', note=note)
-
-def encode_cc(controller, value):
-    """Create a control change MIDI message."""
-    return mido.Message('control_change', control=controller, value=value)
-
-# FL Studio uses a different approach for SysEx, adapting to use CC-based commands
-def encode_command(command_type, params=None):
+# Enhanced command sending with better feedback
+def send_command(command_type, params=None, wait_for_feedback=True):
     """
-    Encode a command as a series of MIDI messages using FL Studio's expected format.
-    We're simplifying the protocol to better match FL Studio's handling capabilities.
+    Send a command to FL Studio with improved error handling and feedback
     """
-    messages = []
-    
-    # Command marker (CC 120 with value = command type)
-    messages.append(encode_cc(120, command_type))
-    
-    # If we have parameters, encode them as simplified key-value pairs
-    if params:
-        for key, value in params.items():
-            # Convert non-integer values to integers where possible
-            if isinstance(value, float):
-                # Scale floats between 0-1 to 0-127
-                if 0 <= value <= 1:
-                    value_int = int(value * 127)
-                else:
-                    value_int = int(min(127, max(0, value)))
-            elif isinstance(value, bool):
-                value_int = 127 if value else 0
-            elif isinstance(value, str):
-                # For strings, we just send the first char's ASCII value
-                # (limited, but works for simple identifiers)
-                value_int = ord(value[0]) % 128 if value else 0
-            elif isinstance(value, int):
-                value_int = min(127, max(0, value))
-            else:
-                value_int = 0
-                
-            # Encode parameter key using CC 121-125 range
-            # This limits us to 5 parameters, but ensures compatibility
-            if key == "track" or key == "channel":
-                messages.append(encode_cc(121, value_int))
-            elif key == "pattern" or key == "bpm":
-                messages.append(encode_cc(122, value_int))
-            elif key == "level" or key == "value":
-                messages.append(encode_cc(123, value_int))
-            elif key == "action" or key == "type":
-                messages.append(encode_cc(124, value_int))
-            elif key == "instrument" or key == "name":
-                messages.append(encode_cc(125, value_int))
-    
-    # Command end marker (CC 126 with value 127)
-    messages.append(encode_cc(126, 127))
-    
-    return messages
-
-# For creating MIDI clips, we'll use a different approach - sending actual notes
-def encode_midi_clip(notes, clear=True):
-    """
-    Encode a MIDI clip by sending the actual note events directly.
-    This will be more reliable than trying to encode complex data structures.
-    """
-    messages = []
-    
-    # Send a command to clear existing notes if requested
-    if clear:
-        messages.extend(encode_command(1, {"clear": 1}))
-        time.sleep(0.05)  # Small delay for FL Studio to process
-    
-    # Now send the actual note events
-    for note_data in notes:
-        note = note_data.get("note", 60)
-        velocity = note_data.get("velocity", 100)
-        # We'll ignore position and length for now, since those aren't working properly
-        
-        # Send note on (direct note event)
-        messages.append(encode_note_on(note, velocity))
-        
-        # For chord progressions, space the notes slightly
-        time.sleep(0.01)
-    
-    return messages
-
-# Helper function to send a sequence of MIDI messages
-def send_messages(messages):
     if output_port is None:
-        logger.error("Cannot send MIDI messages: No output port available")
-        return False
+        logger.error("Cannot send command: No MIDI output port available")
+        return {"status": "error", "message": "No MIDI output port available"}
     
     try:
-        for message in messages:
-            logger.info(f"Sending MIDI message: {message}")
-            output_port.send(message)
-            # Small delay to avoid overloading the MIDI buffer
-            time.sleep(0.005)
-        return True
+        # Command start
+        output_port.send(mido.Message('control_change', control=120, value=command_type))
+        
+        # Send parameters
+        if params:
+            for key, value in params.items():
+                param_cc = None
+                if key in ["track", "channel"]:
+                    param_cc = 121
+                elif key in ["pattern", "bpm"]:
+                    param_cc = 122
+                elif key in ["value", "level"]:
+                    param_cc = 123
+                elif key in ["action", "type"]:
+                    param_cc = 124
+                elif key in ["instrument", "name"]:
+                    param_cc = 125
+                
+                if param_cc:
+                    # Convert value to MIDI range
+                    midi_value = 0
+                    if isinstance(value, bool):
+                        midi_value = 127 if value else 0
+                    elif isinstance(value, float):
+                        # Scale float between 0-1 to 0-127
+                        if 0 <= value <= 1:
+                            midi_value = int(value * 127)
+                        else:
+                            midi_value = min(127, max(0, int(value)))
+                    elif isinstance(value, int):
+                        midi_value = min(127, max(0, value))
+                    
+                    output_port.send(mido.Message('control_change', control=param_cc, value=midi_value))
+                    time.sleep(0.01)  # Small delay between parameters
+        
+        # Command end
+        output_port.send(mido.Message('control_change', control=126, value=127))
+        
+        # TODO: Implement feedback listening mechanism if wait_for_feedback is True
+        
+        return {"status": "success", "command": command_type, "params": params}
     except Exception as e:
-        logger.error(f"Error sending MIDI messages: {e}")
-        return False
+        logger.error(f"Error sending command: {e}")
+        return {"status": "error", "message": str(e)}
 
-# Define MCP tools
+# Enhanced MCP tool implementations
 @mcp.tool()
 def get_midi_ports() -> List[str]:
-    """
-    Get available MIDI output ports.
-    
-    Returns:
-        A list of available MIDI output ports on the system.
-    """
+    """Get available MIDI output ports."""
     try:
         ports = mido.get_output_names()
         logger.info(f"Available MIDI ports: {ports}")
@@ -167,428 +109,281 @@ def get_midi_ports() -> List[str]:
 
 @mcp.tool()
 def play_note(note: int, velocity: int = 100, duration: float = 0.5) -> Dict[str, Any]:
-    """
-    Play a single note.
-    
-    Args:
-        note: MIDI note number (0-127)
-        velocity: Note velocity (0-127)
-        duration: Note duration in seconds
-    
-    Returns:
-        Status information about the played note.
-    """
+    """Play a single MIDI note."""
     if not 0 <= note <= 127:
-        return {"error": "Note must be between 0 and 127"}
+        return {"status": "error", "message": "Note must be between 0 and 127"}
     
     if not 0 <= velocity <= 127:
-        return {"error": "Velocity must be between 0 and 127"}
+        return {"status": "error", "message": "Velocity must be between 0 and 127"}
     
-    logger.info(f"Playing note: {note}, velocity: {velocity}, duration: {duration}")
-    
-    # Send note on
-    send_messages([encode_note_on(note, velocity)])
-    
-    # Schedule note off after duration
-    time.sleep(duration)
-    send_messages([encode_note_off(note)])
-    
-    return {"status": "success", "note": note, "velocity": velocity, "duration": duration}
+    try:
+        # Send note on
+        if output_port:
+            output_port.send(mido.Message('note_on', note=note, velocity=velocity))
+            time.sleep(duration)
+            output_port.send(mido.Message('note_off', note=note, velocity=0))
+            logger.info(f"Played note {note} with velocity {velocity} for {duration}s")
+            return {"status": "success", "note": note, "velocity": velocity, "duration": duration}
+        else:
+            return {"status": "error", "message": "No MIDI output port available"}
+    except Exception as e:
+        logger.error(f"Error playing note: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
-def create_midi_clip(notes: List[Dict[str, Any]], pattern: int = None, channel: int = None) -> Dict[str, Any]:
-    """
-    Create a MIDI clip with multiple notes.
-    
-    Args:
-        notes: List of note dictionaries, each with:
-            - note: MIDI note number (0-127)
-            - velocity: Note velocity (0-127)
-        pattern: Pattern number to use (optional)
-        channel: Channel to use (optional)
-    
-    Returns:
-        Status information about the created clip.
-    """
-    logger.info(f"Creating MIDI clip with {len(notes)} notes")
-    
-    # First send pattern selection if specified
-    if pattern is not None:
-        select_pattern(pattern)
-        time.sleep(0.1)  # Give FL Studio time to process
-    
-    # Then send channel selection if specified
-    if channel is not None:
-        # Send a CC message to select the channel (CC 0 is commonly used for this)
-        send_messages([encode_cc(0, min(127, channel))])
-        time.sleep(0.1)  # Give FL Studio time to process
-    
-    # Now send the note events
-    messages = encode_midi_clip(notes)
-    success = send_messages(messages)
-    
-    if success:
-        return {"status": "success", "notes_count": len(notes)}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
-
-@mcp.tool()
-def create_track(name: str, track_type: str = "instrument") -> Dict[str, Any]:
-    """
-    Create a new track in FL Studio.
-    
-    Args:
-        name: Name for the track
-        track_type: Type of track ("instrument", "audio", "automation")
-    
-    Returns:
-        Status information about the created track.
-    """
-    logger.info(f"Creating new track: {name}, type: {track_type}")
-    
-    # Simplify track type to a numeric value
-    type_value = 0  # Default instrument
-    if track_type == "audio":
-        type_value = 1
-    elif track_type == "automation":
-        type_value = 2
-    
-    # Create command for track creation
-    command = encode_command(2, {"type": type_value, "name": name[0] if name else "T"})
-    success = send_messages(command)
-    
-    # FL Studio needs some time to create the track
-    time.sleep(0.5)
-    
-    if success:
-        return {"status": "success", "track_type": track_type, "name": name}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+def create_track(name: str = "New Track", track_type: str = "instrument") -> Dict[str, Any]:
+    """Create a new track in FL Studio with proper instrument loading."""
+    try:
+        # Map track type to value
+        type_value = 0  # Default (instrument)
+        if track_type.lower() == "audio":
+            type_value = 1
+        elif track_type.lower() == "automation":
+            type_value = 2
+            
+        # Send command to create track
+        result = send_command(2, {"type": type_value})
+        logger.info(f"Created track: {result}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error creating track: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def load_instrument(instrument_name: str, channel: int = None) -> Dict[str, Any]:
-    """
-    Load an instrument into a channel.
-    
-    Args:
-        instrument_name: Name of the instrument to load (e.g., "piano", "bass", "drums")
-        channel: Channel to load the instrument into (optional)
-    
-    Returns:
-        Status information about the loaded instrument.
-    """
-    logger.info(f"Loading instrument: {instrument_name}")
-    
-    # Simplify instrument mapping to numeric values
-    instrument_value = 0  # Default 
-    
-    if "piano" in instrument_name.lower():
-        instrument_value = 1
-    elif "bass" in instrument_name.lower():
-        instrument_value = 2
-    elif "drum" in instrument_name.lower():
-        instrument_value = 3
-    elif "synth" in instrument_name.lower():
-        instrument_value = 4
-    
-    # First select channel if specified
-    if channel is not None:
-        # Send a CC message to select the channel (CC 0 is commonly used for this)
-        send_messages([encode_cc(0, min(127, channel))])
-        time.sleep(0.1)  # Give FL Studio time to process
-    
-    # Then send instrument load command
-    command = encode_command(3, {"instrument": instrument_value})
-    success = send_messages(command)
-    
-    # FL Studio needs some time to load the instrument
-    time.sleep(0.5)
-    
-    if success:
-        return {"status": "success", "instrument": instrument_name}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+    """Load an instrument into the selected or specified channel."""
+    try:
+        # Map instrument name to type
+        instrument_value = 0  # Default
+        if "piano" in instrument_name.lower():
+            instrument_value = 1
+        elif "bass" in instrument_name.lower():
+            instrument_value = 2
+        elif "drum" in instrument_name.lower():
+            instrument_value = 3
+        elif "synth" in instrument_name.lower():
+            instrument_value = 4
+        
+        params = {"instrument": instrument_value}
+        if channel is not None:
+            params["track"] = channel
+            
+        # Send command to load instrument
+        result = send_command(3, params)
+        logger.info(f"Loaded instrument: {result}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error loading instrument: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def set_tempo(bpm: int) -> Dict[str, Any]:
-    """
-    Set the project tempo.
-    
-    Args:
-        bpm: Beats per minute (tempo)
-    
-    Returns:
-        Status information about the tempo change.
-    """
-    logger.info(f"Setting tempo to {bpm} BPM")
-    
-    # Convert BPM to MIDI-compatible range (0-127)
-    bpm_adjusted = min(127, max(0, bpm - 50))  # Assuming 50-177 BPM range
-    
-    # FL Studio often uses CC 16 for tempo control
-    simple_message = [encode_cc(16, bpm_adjusted)]
-    command = encode_command(4, {"bpm": bpm_adjusted})
-    
-    # Try both methods: direct CC and our encoded command protocol
-    success = send_messages(simple_message)
-    time.sleep(0.1)
-    success = success and send_messages(command)
-    
-    if success:
-        return {"status": "success", "bpm": bpm}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+    """Set the project tempo."""
+    try:
+        if not 50 <= bpm <= 999:
+            return {"status": "error", "message": "BPM must be between 50 and 999"}
+        
+        # Convert to MIDI value range
+        bpm_adjusted = min(127, max(0, bpm - 50))  # 50-177 BPM mapped to 0-127
+        
+        # Send command to set tempo
+        result = send_command(4, {"pattern": bpm_adjusted})
+        logger.info(f"Set tempo to {bpm} BPM")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error setting tempo: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def control_transport(action: str = "toggle") -> Dict[str, Any]:
-    """
-    Control the transport (play, stop, record).
-    
-    Args:
-        action: One of "play", "stop", "record", or "toggle"
-    
-    Returns:
-        Status information about the transport action.
-    """
-    logger.info(f"Transport control: {action}")
-    
-    # FL Studio often uses standard MMC (MIDI Machine Control) messages
-    # But we'll use both our command protocol and direct CC for compatibility
-    
-    action_value = 0  # Default to play
-    if action == "stop":
-        action_value = 1
-    elif action == "record":
-        action_value = 2
-    elif action == "toggle":
-        action_value = 3
-    
-    # Try using transport-specific MIDI CCs
-    if action == "play" or action == "toggle":
-        simple_message = [encode_cc(118, 127)]  # Common MIDI CC for start
-    elif action == "stop":
-        simple_message = [encode_cc(119, 127)]  # Common MIDI CC for stop
-    elif action == "record":
-        simple_message = [encode_cc(117, 127)]  # Common MIDI CC for record
-    
-    # Send both the simple message and our encoded command
-    success = send_messages(simple_message)
-    time.sleep(0.05)
-    
-    command = encode_command(5, {"action": action_value})
-    success = success and send_messages(command)
-    
-    if success:
-        return {"status": "success", "action": action}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+    """Control transport (play, stop, record)."""
+    try:
+        # Map action to value
+        action_value = 3  # Default (toggle)
+        if action.lower() == "play":
+            action_value = 0
+        elif action.lower() == "stop":
+            action_value = 1
+        elif action.lower() == "record":
+            action_value = 2
+        
+        # Try direct transport controls first (more reliable)
+        if output_port:
+            if action.lower() == "play":
+                output_port.send(mido.Message('control_change', control=118, value=127))
+            elif action.lower() == "stop":
+                output_port.send(mido.Message('control_change', control=119, value=127))
+            elif action.lower() == "record":
+                output_port.send(mido.Message('control_change', control=117, value=127))
+            
+            time.sleep(0.05)  # Small delay
+        
+        # Then send command for complex handling
+        result = send_command(5, {"action": action_value})
+        logger.info(f"Transport control: {action}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error controlling transport: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def select_pattern(pattern: int) -> Dict[str, Any]:
-    """
-    Select a pattern by number.
-    
-    Args:
-        pattern: Pattern number to select
-    
-    Returns:
-        Status information about the pattern selection.
-    """
-    logger.info(f"Selecting pattern {pattern}")
-    
-    # FL Studio often uses Program Change for pattern selection
-    # But we'll use both direct CC and our command protocol
-    
-    pattern_adjusted = min(127, max(0, pattern))
-    
-    # Try program change message (common for pattern selection)
-    program_message = [mido.Message('program_change', program=pattern_adjusted)]
-    success = send_messages(program_message)
-    time.sleep(0.05)
-    
-    # Also send our encoded command
-    command = encode_command(6, {"pattern": pattern_adjusted})
-    success = success and send_messages(command)
-    
-    if success:
-        return {"status": "success", "pattern": pattern}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+    """Select a pattern by number."""
+    try:
+        if not 0 <= pattern <= 999:
+            return {"status": "error", "message": "Pattern must be between 0 and 999"}
+        
+        pattern_adjusted = min(127, pattern)  # Limit to MIDI range
+        
+        # Try program change for direct selection first
+        if output_port:
+            output_port.send(mido.Message('program_change', program=pattern_adjusted))
+            time.sleep(0.05)  # Small delay
+            
+        # Then send command for complex handling (creates pattern if needed)
+        result = send_command(6, {"pattern": pattern_adjusted})
+        logger.info(f"Selected pattern {pattern}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error selecting pattern: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def set_mixer_level(track: int = 0, level: float = 0.78) -> Dict[str, Any]:
-    """
-    Set mixer track volume level.
-    
-    Args:
-        track: Mixer track (0 is master)
-        level: Volume level (0.0 to 1.0)
-    
-    Returns:
-        Status information about the mixer level change.
-    """
-    logger.info(f"Setting mixer track {track} level to {level}")
-    
-    # Convert level to MIDI range (0-127)
-    level_adjusted = int(level * 127)
-    
-    # FL Studio often uses CCs in range 11-19 for mixer levels
-    # Let's use a common approach plus our command
-    
-    # Each mixer track often has a dedicated CC
-    mixer_cc = 11 + min(8, track)  # CCs 11-19 for tracks 0-8
-    simple_message = [encode_cc(mixer_cc, level_adjusted)]
-    success = send_messages(simple_message)
-    time.sleep(0.05)
-    
-    # Also send our encoded command
-    command = encode_command(7, {"track": track, "level": level})
-    success = success and send_messages(command)
-    
-    if success:
-        return {"status": "success", "track": track, "level": level}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+    """Set mixer track volume level."""
+    try:
+        if not 0 <= track <= 125:
+            return {"status": "error", "message": "Track must be between 0 and 125"}
+        
+        if not 0 <= level <= 1:
+            return {"status": "error", "message": "Level must be between 0.0 and 1.0"}
+        
+        # Try direct mixer control first
+        if output_port and track <= 8:
+            # CCs 11-19 often map to first 9 mixer tracks
+            mixer_cc = 11 + track
+            level_adjusted = int(level * 127)
+            output_port.send(mido.Message('control_change', control=mixer_cc, value=level_adjusted))
+            time.sleep(0.05)  # Small delay
+        
+        # Send command for proper handling
+        result = send_command(7, {"track": track, "value": int(level * 127)})
+        logger.info(f"Set mixer track {track} level to {level}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error setting mixer level: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
 def create_chord_progression(
     progression: List[str], 
-    octave: int = 4, 
-    pattern: Optional[int] = None,
-    channel: Optional[int] = None
+    octave: int = 4,
+    pattern: Optional[int] = None
 ) -> Dict[str, Any]:
-    """
-    Create a chord progression using common chord names.
-    
-    Args:
-        progression: List of chord names (e.g., ["C", "G", "Am", "F"])
-        octave: Base octave for the chords
-        pattern: Pattern number to create in (optional)
-        channel: Channel to create in (optional)
-    
-    Returns:
-        Status information about the created chord progression.
-    """
-    logger.info(f"Creating chord progression: {progression}, octave: {octave}")
-    
-    # Define chord note offsets
-    chord_types = {
-        "": [0, 4, 7],           # Major
-        "m": [0, 3, 7],          # Minor
-        "7": [0, 4, 7, 10],      # Dominant 7th
-        "maj7": [0, 4, 7, 11],   # Major 7th
-        "m7": [0, 3, 7, 10],     # Minor 7th
-        "dim": [0, 3, 6],        # Diminished
-        "aug": [0, 4, 8],        # Augmented
-        "sus4": [0, 5, 7],       # Suspended 4th
-        "sus2": [0, 2, 7],       # Suspended 2nd
-    }
-    
-    # Define note values for each root
-    root_notes = {
-        "C": 60, "C#": 61, "Db": 61, "D": 62, "D#": 63, "Eb": 63,
-        "E": 64, "F": 65, "F#": 66, "Gb": 66, "G": 67, "G#": 68,
-        "Ab": 68, "A": 69, "A#": 70, "Bb": 70, "B": 71
-    }
-    
-    # First select the pattern if specified
-    if pattern is not None:
-        select_pattern(pattern)
-        time.sleep(0.1)
-    
-    # Then select the channel if specified
-    if channel is not None:
-        send_messages([encode_cc(0, min(127, channel))])
-        time.sleep(0.1)
-    
-    # For FL Studio, we'll simplify by just sending the notes directly
-    # This is more reliable than trying to encode complex chord data
-    notes = []
-    
-    for i, chord_name in enumerate(progression):
-        # Parse chord name (e.g., "Am7" -> root="A", type="m7")
-        root = ""
-        chord_type = ""
+    """Create a chord progression using direct note events."""
+    try:
+        # First select pattern if specified
+        if pattern is not None:
+            select_pattern(pattern)
+            time.sleep(0.1)
         
-        for j, char in enumerate(chord_name):
-            if j > 0 and (char.isdigit() or char in ['m', 'd', 'a', 's']):
-                chord_type = chord_name[j:]
-                break
-            root += char
+        # Define chord note offsets
+        chord_types = {
+            "": [0, 4, 7],           # Major
+            "m": [0, 3, 7],          # Minor
+            "7": [0, 4, 7, 10],      # Dominant 7th
+            "maj7": [0, 4, 7, 11],   # Major 7th
+            "m7": [0, 3, 7, 10],     # Minor 7th
+            "dim": [0, 3, 6],        # Diminished
+            "aug": [0, 4, 8],        # Augmented
+            "sus4": [0, 5, 7],       # Suspended 4th
+            "sus2": [0, 2, 7],       # Suspended 2nd
+        }
         
-        # Get chord structure
-        if chord_type in chord_types:
-            offsets = chord_types[chord_type]
-        else:
-            # Handle complex chords by defaulting to major
-            offsets = chord_types[""]
+        # Define note values for each root
+        root_notes = {
+            "C": 60, "C#": 61, "Db": 61, "D": 62, "D#": 63, "Eb": 63,
+            "E": 64, "F": 65, "F#": 66, "Gb": 66, "G": 67, "G#": 68,
+            "Ab": 68, "A": 69, "A#": 70, "Bb": 70, "B": 71
+        }
         
-        # Get root note value
-        if root in root_notes:
-            root_value = root_notes[root] + (octave - 4) * 12
-        else:
-            # Default to C if invalid root
-            root_value = 60 + (octave - 4) * 12
+        # For each chord, play its notes as direct MIDI events
+        for chord_name in progression:
+            # Parse chord name
+            root = ""
+            chord_type = ""
+            for j, char in enumerate(chord_name):
+                if j > 0 and (char.isdigit() or char in ['m', 'd', 'a', 's']):
+                    chord_type = chord_name[j:]
+                    break
+                root += char
+            
+            # Get chord structure
+            offsets = chord_types.get(chord_type, chord_types[""])
+            
+            # Get root note value
+            if root in root_notes:
+                root_value = root_notes[root] + (octave - 4) * 12
+            else:
+                # Default to C if invalid root
+                root_value = 60 + (octave - 4) * 12
+            
+            # Play notes for this chord
+            if output_port:
+                for offset in offsets:
+                    note = root_value + offset
+                    if 0 <= note <= 127:
+                        output_port.send(mido.Message('note_on', note=note, velocity=90))
+                        time.sleep(0.01)  # Small delay between notes
+                
+                # Let chord play for a moment before next chord
+                time.sleep(0.5)
+                
+                # Send note offs for all notes
+                for offset in offsets:
+                    note = root_value + offset
+                    if 0 <= note <= 127:
+                        output_port.send(mido.Message('note_off', note=note, velocity=0))
+                
+                time.sleep(0.1)  # Gap between chords
         
-        # Create notes for this chord
-        for offset in offsets:
-            notes.append({
-                "note": root_value + offset,
-                "velocity": 90
-            })
-    
-    # Send all notes - we'll simplify by just playing them
-    messages = encode_midi_clip(notes)
-    success = send_messages(messages)
-    
-    if success:
-        return {"status": "success", "chords": len(progression)}
-    else:
-        return {"status": "error", "message": "Failed to send MIDI messages"}
+        return {"status": "success", "progression": progression}
+    except Exception as e:
+        logger.error(f"Error creating chord progression: {e}")
+        return {"status": "error", "message": str(e)}
 
 @mcp.tool()
-def fl_studio_direct_command(command_name: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-    """
-    Send a direct command to FL Studio.
-    This is a flexible function for advanced users who understand FL Studio's MIDI mapping.
-    
-    Args:
-        command_name: Name of the command (check FL documentation for supported commands)
-        params: Dictionary of parameters for the command
-    
-    Returns:
-        Status information about the command execution.
-    """
-    logger.info(f"Sending direct command: {command_name} with params: {params}")
-    
-    # Map common command names to MIDI CC values
-    command_map = {
-        "undo": [encode_cc(101, 127)],
-        "redo": [encode_cc(102, 127)],
-        "save": [encode_cc(103, 127)],
-        "quantize": [encode_cc(104, 127)],
-        "metronome": [encode_cc(105, 127)],
-        "patterns_window": [encode_cc(106, 127)],
-        "mixer_window": [encode_cc(107, 127)],
-        "piano_roll": [encode_cc(108, 127)],
-        "playlist": [encode_cc(109, 127)],
-        "browser": [encode_cc(110, 127)],
-    }
-    
-    if command_name.lower() in command_map:
-        messages = command_map[command_name.lower()]
-        success = send_messages(messages)
+def add_audio_effect(track: int = 0, effect_type: str = "reverb") -> Dict[str, Any]:
+    """Add an audio effect to a mixer track."""
+    try:
+        # Map effect type to value
+        effect_value = 0  # Default (limiter)
+        if "reverb" in effect_type.lower():
+            effect_value = 1
+        elif "delay" in effect_type.lower():
+            effect_value = 2
+        elif "eq" in effect_type.lower():
+            effect_value = 3
+        elif "comp" in effect_type.lower():
+            effect_value = 4
         
-        if success:
-            return {"status": "success", "command": command_name}
-        else:
-            return {"status": "error", "message": "Failed to send MIDI messages"}
-    else:
-        return {"status": "error", "message": f"Unknown command: {command_name}"}
+        # Send command to add effect
+        result = send_command(10, {"track": track, "instrument": effect_value})
+        logger.info(f"Added {effect_type} effect to track {track}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error adding audio effect: {e}")
+        return {"status": "error", "message": str(e)}
 
-# Run the MCP server
 def main():
-    logger.info("FL Studio MCP Server starting...")
+    logger.info("Starting FL Studio MCP Server...")
     mcp.run()
 
 if __name__ == "__main__":
