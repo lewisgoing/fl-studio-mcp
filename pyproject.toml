@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flstudio-mcp-iac"
+version = "0.1.0"
+description = "FL Studio MCP server for Claude integration (IAC version)"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "fastmcp>=1.2.0",
+    "mido",
+    "python-rtmidi",
+    "httpx",
+]
+
+[project.urls]
+repository = "https://github.com/yourusername/flstudio-mcp-iac"
+
+[project.scripts]
+flstudio-mcp-iac = "flstudio_mcp_iac.server:main"
