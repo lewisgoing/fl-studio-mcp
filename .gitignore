@@ -26,7 +26,7 @@ docs
 .env
 .env.*
 
-new/*
+
 
 # Log Files
 *.log
