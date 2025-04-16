@@ -4,11 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flstudio-mcp-iac"
-version = "0.1.0"
+version = "0.3.0"
 description = "FL Studio MCP server for Claude integration (IAC version)"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+    {name = "Lewis Going", email = "whereislewisgoing@gmail.com"}
+]
 license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+]
 dependencies = [
     "fastmcp>=1.2.0",
     "mido",
@@ -16,10 +24,18 @@ dependencies = [
     "httpx",
     "fl-studio-api-stubs>=37.0.1",
     "mypy>=1.15.0",
+    "hatch>=1.14.1",
 ]
-
-[project.urls]
-repository = "https://github.com/yourusername/flstudio-mcp-iac"
 
 [project.scripts]
 flstudio-mcp-iac = "flstudio_mcp_iac.server:main"
+
+[tool.setuptools]
+packages = ["MCP_Server"]
+
+[project.urls]
+"Homepage" = "https://github.com/lewisgoing/fl-studio-mcp"
+"Bug Tracker" = "https://github.com/lewisgoing/fl-studio-mcp/issues"
+
+
+
