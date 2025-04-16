@@ -22,6 +22,7 @@ DEBUG = True
 COMMAND_TIMEOUT = 5000 # ms
 
 class MCPController:
+    
     def __init__(self):
         self.command_buffer = []
         self.current_command = None
@@ -104,7 +105,7 @@ class MCPController:
             elif 121 <= event.data1 <= 125 and not self.command_complete:
                 param_index = event.data1 - 121
                 param_names = ["track", "pattern", "value", "action", "instrument"]
-                if param_index < len(param_names):
+                if param_index < len(param_names) and self.current_command is not None:
                     param_name = param_names[param_index]
                     self.current_command["params"][param_name] = event.data2
                     self.log(f"Command param: {param_name}={event.data2}")
@@ -116,7 +117,7 @@ class MCPController:
                 self.log(f"Command complete: {self.current_command}")
                 # Process the command immediately
                 try:
-                    result = self.process_command(self.current_command)
+                    result = self.process_command(self.current_command) 
                     # Send feedback if available
                     if result:
                         self.send_feedback({"status": "success", "result": result})
@@ -211,7 +212,7 @@ class MCPController:
                 return {"error": "Maximum number of channels reached"}
 
             # Add a channel to the channel rack
-            channels.addChannel(track_type == 1) # True for audio channel
+            channels.addChannel(track_type == 1) 
 
             # Set the name based on type
             name = "Audio" if track_type == 1 else "Automation" if track_type == 2 else "Instrument"
@@ -250,41 +251,29 @@ class MCPController:
             channels.selectOneChannel(channel)
             self.state["selected_channel"] = channel
 
-            # Map instrument type to FL Studio plugin
+            # Define instruments and their potential replacements
             instrument_map = {
-                1: "FL Keys", # Piano
-                2: "FLEX", # Bass
-                3: "FPC", # Drums
-                4: "3x Osc", # Synth
-                0: "Sampler" # Default
+                0: "FL Keys", # Default
+                1: "FPC",     # Piano
+                2: "BooBass", # Bass
+                3: "FPC",     # Drum
+                4: "Sytrus"   # Synth
             }
+            instrument_name = instrument_map.get(instrument_type, "FL Keys")
 
-            # Get the instrument name
-            instrument_name = instrument_map.get(instrument_type, "3x Osc")
-
-            # Find the plugin index
-            plugin_index = plugins.find(instrument_name)
+            # Find the plugin index for the instrument
+            plugin_index = plugins.find(instrument_name)  
             if plugin_index == -1:
-                self.log(f"Plugin {instrument_name} not found")
-                return {"error": f"Plugin {instrument_name} not found"}
+                self.log(f"Instrument '{instrument_name}' not found. Defaulting to FL Keys.")
+                plugin_index = plugins.find("FL Keys")  
+                if plugin_index == -1:
+                    return {"error": "Could not find default instrument 'FL Keys'"}
 
-            # Remove existing plugin if any
-            if channels.getChannelType(channel) == channels.CT_GenPlug:
-                # A generator plugin is already assigned
-                pass # We'll replace it
-
-            # Load the instrument
-            plugins.replace(channel, plugin_index)
-
-            # For FLEX, try to set a preset based on type
-            if instrument_name == "FLEX" and instrument_type == 2: # Bass
-                # Wait for the plugin to load
-                time.sleep(0.5)
-                # Try to find and set a bass preset
-                # This requires more complex handling of plugin parameters
-
-            self.log(f"Loaded {instrument_name} on channel {channel}")
-            return {"success": True, "channel": channel, "instrument": instrument_name}
+            # Replace the current instrument (if it's a generator)
+            if channels.channelType(channel) == midi.CT_GenPlug:  
+                channels.replace(channel, plugin_index)  
+                self.log(f"Loaded '{instrument_name}' into channel {channel}")
+                return {"success": True, "channel": channel, "instrument": instrument_name}
         except Exception as e:
             self.log(f"Error in load_instrument: {str(e)}")
             return {"error": str(e)}
@@ -292,17 +281,12 @@ class MCPController:
     def cmd_set_tempo(self, params):
         """Set project tempo"""
         try:
-            # Get parameters
-            bpm = params.get("pattern", 0)
-
-            # Convert from MIDI range back to actual BPM
-            if 0 <= bpm <= 127:
-                actual_bpm = bpm + 50 # 50-177 BPM range
-                transport.setMainBPM(actual_bpm)
-                self.log(f"Set tempo to {actual_bpm} BPM")
-                return {"success": True, "bpm": actual_bpm}
-            else:
-                return {"error": f"Invalid BPM value: {bpm}"}
+            bpm = params.get("pattern", 120) # Assuming 120 is the default mapped value
+            # Convert MIDI value back to actual BPM (approximate)
+            actual_bpm = bpm + 50 # Simple reverse mapping
+            transport.setMainBPM(actual_bpm)  
+            self.log(f"Set tempo to {actual_bpm} BPM")
+            return {"success": True, "bpm": actual_bpm}
         except Exception as e:
             self.log(f"Error in set_tempo: {str(e)}")
             return {"error": str(e)}
@@ -422,14 +406,31 @@ class MCPController:
                 return {"error": "No empty effect slots available"}
 
             # Find the plugin index
-            plugin_index = plugins.find(effect_name)
+            plugin_index = plugins.find(effect_name)  
             if plugin_index == -1:
-                return {"error": f"Plugin {effect_name} not found"}
+                self.log(f"Effect '{effect_name}' not found.")
+                # Try finding a default reverb or delay
+                plugin_index = plugins.find("Fruity Reeverb 2")  
+                if plugin_index == -1:
+                    plugin_index = plugins.find("Fruity Delay 3")  
+                    if plugin_index == -1:
+                        return {"error": f"Could not find effect '{effect_name}' or default effects"}
+                effect_name = plugins.getPluginName(plugin_index)
 
-            # Add the effect
-            mixer.trackPluginLoad(track, plugin_index, slot)
-            self.log(f"Added {effect_name} to mixer track {track}, slot {slot}")
-            return {"success": True, "track": track, "effect": effect_name, "slot": slot}
+            # Add the effect to the first available slot
+            slot_index = -1
+            for i in range(10): # Max 10 slots
+                if mixer.getTrackPluginId(track, i) == 0:
+                    slot_index = i
+                    break
+            
+            if slot_index == -1:
+                return {"error": "No free effect slots on this track"}
+
+            mixer.trackPluginLoad(track, slot_index, plugin_index)  
+
+            self.log(f"Added effect '{effect_name}' to mixer track {track}, slot {slot_index}")
+            return {"success": True, "track": track, "effect": effect_name, "slot": slot_index}
         except Exception as e:
             self.log(f"Error in add_audio_effect: {str(e)}")
             return {"error": str(e)}
@@ -438,7 +439,7 @@ class MCPController:
         """Called periodically"""
         # Check for command timeout
         if not self.command_complete and self.current_command is not None:
-            current_time = general.getTime()
+            current_time = general.getTime()  
             if current_time - self.last_command_time > COMMAND_TIMEOUT:
                 self.log(f"Command timeout: {self.current_command}")
                 self.command_complete = True

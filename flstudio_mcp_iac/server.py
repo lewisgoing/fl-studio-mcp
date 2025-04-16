@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger('flstudio-mcp')
 
 # Initialize MCP server
-mcp = FastMCP("flstudio-mcp")
+mcp: FastMCP = FastMCP("flstudio-mcp")
 
 # MIDI port handling
 output_port = None
