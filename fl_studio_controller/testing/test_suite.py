@@ -335,3 +335,8 @@ class TestSuite:
         print("="*56)
         
         return results 
+    
+if __name__ == "__main__":
+    import channels  # assuming this is your FL Studio channel helpers module
+    suite = TestSuite(channels)
+    suite.run_all_tests()
