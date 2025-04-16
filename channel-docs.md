@@ -762,3 +762,4 @@ Processes a recording event.
 Included since API version 1.
 
 Deprecated since API version 7.
+
