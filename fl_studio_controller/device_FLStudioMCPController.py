@@ -18,6 +18,7 @@ import time
 import json
 import random
 import math
+import arrangement
 
 # Constants
 DEBUG = True
@@ -322,7 +323,7 @@ class MCPController:
         elif cmd_type == 3: # Load instrument
             return self.cmd_load_instrument(params)
         elif cmd_type == 4: # Set tempo
-            return self.cmd_set_tempo(params)
+            return self.set_tempo(bpm)
         elif cmd_type == 5: # Transport control
             return self.cmd_transport_control(params)
         elif cmd_type == 6: # Select pattern
@@ -446,20 +447,52 @@ class MCPController:
         except Exception as e:
             self.log(f"Error in load_instrument: {str(e)}")
             return {"error": str(e)}
-
-    def cmd_set_tempo(self, params):
-        """Set project tempo"""
+        
+    def get_current_tempo(self):
+        """Get the current project tempo in BPM"""
         try:
-            bpm = params.get("pattern", 120) # Assuming 120 is the default mapped value
-            # Convert MIDI value back to actual BPM (approximate)
-            actual_bpm = bpm + 50 # Simple reverse mapping
-            transport.setMainBPM(actual_bpm)  
-            self.log(f"Set tempo to {actual_bpm} BPM")
-            return {"success": True, "bpm": actual_bpm}
+            tempo = mixer.getCurrentTempo() / 1000
+            self.log(f"Current project tempo: {tempo} BPM")
+            return tempo
         except Exception as e:
-            self.log(f"Error in set_tempo: {str(e)}")
-            return {"error": str(e)}
+            self.log(f"Error getting tempo, using default: {e}")
+            return 120  # Default fallback
 
+    def set_tempo(self, bpm):
+        """
+        Change the tempo in FL Studio to the specified BPM value
+        
+        Args:
+            bpm (float or dict): The desired tempo in beats per minute,
+                                or a params dictionary with 'pattern' key
+        """
+        # Handle both direct BPM value and params dictionary
+        if isinstance(bpm, dict):
+            # This is a params dictionary from MIDI
+            bpm_value = bpm.get("pattern", 70) + 50  # Convert from MIDI range
+        else:
+            # This is a direct BPM value
+            bpm_value = bpm
+        
+        # Ensure BPM is in a reasonable range
+        bpm_value = max(20, min(999, bpm_value))
+        
+        # FL Studio stores tempo as BPM * 1000
+        tempo_value = int(bpm_value * 1000)
+        
+        # Use processRECEvent to set the tempo
+        general.processRECEvent(
+            midi.REC_Tempo,
+            tempo_value,
+            midi.REC_Control | midi.REC_UpdateControl
+        )
+        
+        # Log the change
+        self.log(f"Set tempo to {bpm_value} BPM")
+        
+        # Return success
+        return {"success": True, "bpm": bpm_value}
+    
     def cmd_transport_control(self, params):
         """Control transport (play, stop, record)"""
         try:
@@ -638,11 +671,17 @@ class MCPController:
 flMCPController = None
 
 def OnInit():
+    """Called when loaded by FL Studio"""
     global flMCPController
     flMCPController = MCPController()
-    return True
+    
+    print("FL Studio MCP Controller initialized! Have fun!")
+    print("type -h for help")
+    
+    return
 
 def OnDeInit():
+    """Called when the script is unloaded by FL Studio"""
     global flMCPController
     flMCPController = None
     return True
@@ -658,6 +697,16 @@ def OnIdle():
     if flMCPController:
         flMCPController.OnIdle()
     return True
+
+def OnTransport(isPlaying):
+    """Called when the transport state changes (play/stop)"""
+    print(f"Transport state changed: {'Playing' if isPlaying else 'Stopped'}")
+    return
+
+def OnTempoChange(tempo):
+    """Called when the tempo changes"""
+    print(f"Tempo changed to: {tempo} BPM")
+    return
 
 # Direct utility functions that can be called from FL Studio scripts
 def RandomizeAllChannelColors():
