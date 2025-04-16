@@ -1,0 +1,13 @@
+{
+    "mypy-type-checker.cwd": "${nearestConfig}",
+    "mypy-type-checker.args": [
+        "--plugins=fl_studio_api_stubs.mypy_plugin"
+    ],
+    "mypy-type-checker.reportingScope": "workspace",
+    "mypy-type-checker.interpreter": [
+        "/Users/lewisgoing/LocalDev/flstudio-mcp-iac/.venv/bin/python"
+    ],
+    "mypy-type-checker.path": [
+        "/Users/lewisgoing/LocalDev/flstudio-mcp-iac/.venv/bin/mypy"
+    ]
+}

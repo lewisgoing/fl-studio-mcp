@@ -9,3 +9,21 @@ wheels/
 # Virtual environments
 .venv
 .DS_Store
+.DS_Store
+flstudio_mcp_iac/.DS_Store
+.mypy_cache
+.vscode
+uv.lock
+
+# Test Artifacts
+.pytest_cache/
+
+# Coverage Reports
+.coverage
+
+# Environment Variables
+.env
+.env.*
+
+# Log Files
+*.log

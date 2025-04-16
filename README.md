@@ -1,10 +1,11 @@
 # FL Studio MCP Integration v2.0
 
-This guide will help you set up the FL Studio MCP (Model Context Protocol) integration v2.0, allowing Claude AI to control FL Studio through MIDI with advanced music production capabilities.
+**(macOS Only - Current Version)**
+
+This guide helps set up the FL Studio MCP (Model Context Protocol) integration v2.0, allowing AI control of FL Studio via MIDI.
 
 ## Overview of Changes
 
-The v2.0 release includes significant enhancements to the MCP server and FL Studio controller script:
 
 1. **Dual-protocol architecture**:
    - **CC-based protocol** for simple commands (play, stop, etc.)
@@ -22,6 +23,29 @@ The v2.0 release includes significant enhancements to the MCP server and FL Stud
    - Better MIDI communication
    - Structured feedback mechanism
    - Music theory implementation (scales, chords, progressions)
+
+## Current Status (as of YYYY-MM-DD - Please update date)
+
+**Working Features:**
+
+Based on initial testing, the following core functionalities are confirmed working:
+
+*   **Basic Commands:**
+    *   `play_note`: Playing individual MIDI notes.
+    *   `control_transport`: Controlling playback (play/stop).
+    *   `select_pattern`: Selecting patterns.
+    *   `add_audio_effect`: Adding effects to mixer tracks.
+*   **Advanced Commands:**
+    *   `create_notes`: Create/clear notes (Implementation unclear)
+
+**Non-Functional / Under Development:**
+
+The following features are currently not working reliably or are pending implementation/debugging:
+
+*   **Basic Commands:** `create_track`, `load_instrument`, `set_tempo`, `set_mixer_level`, `select_channel`, `add_midi_effect`.
+*   **Advanced Commands:** `create_chord_progression`, `create_melody`, `automate_parameter`, `set_arrangement`, `get_status`.
+
+*Note: The status reflects the current state and may change with further development and debugging. `create_chord_progression` is notably non-functional due to missing controller implementation.*
 
 ## Setup Instructions
 
@@ -49,12 +73,11 @@ The v2.0 release includes significant enhancements to the MCP server and FL Stud
 
 ### Step 3: Install the FL Studio Controller Script
 
-1. Navigate to your FL Studio MIDI scripts folder:
-   - **Windows**: `C:\Program Files\Image-Line\FL Studio 21\System\Hardware\`
-   - **macOS**: `/Applications/FL Studio.app/Contents/Resources/FL/System/Hardware/`
+1. Navigate to your FL Studio MIDI scripts folder on macOS:
+   `/Applications/FL Studio.app/Contents/Resources/FL/System/Hardware/`
 
-2. Create a new folder called `FL Studio MCP Controller`
-3. Copy `device_flstudiocontroller.py` to this folder
+2. Create a new folder named `FL Studio MCP Controller`.
+3. Copy `device_flstudiocontroller.py` into this new folder.
 
 ### Step 4: Configure FL Studio
 
@@ -102,89 +125,87 @@ create_chord_progression(
 
 ### Melody Generation
 
-Generate melodies based on musical scales:
-
+**(Note: `create_melody` is currently non-functional)**
 ```python
-# Create a melody in C major
-create_melody(
-    scale="C major",
-    length=8,
-    channel=1,
-    velocity=90
-)
+# Example: Create a melody in C major (Currently non-functional)
+# create_melody(
+#     scale="C major",
+#     length=8,
+#     channel=1,
+#     velocity=90
+# )
 
-# Create a pentatonic melody
-create_melody(
-    scale="A pentatonicminor",
-    length=16,
-    channel=2,
-    seed=42  # Use a seed for reproducible melodies
-)
+# Example: Create a pentatonic melody (Currently non-functional)
+# create_melody(
+#     scale="A pentatonicminor",
+#     length=16,
+#     channel=2,
+#     seed=42  # Use a seed for reproducible melodies
+# )
 ```
 
 ### Parameter Automation
 
-Automate plugin parameters over time:
-
+**(Note: `automate_parameter` is currently non-functional)**
 ```python
-# Automate filter cutoff
-automate_parameter(
-    track_index=1,
-    plugin_index=0,
-    parameter_index=12,  # Cutoff parameter
-    points=[(0, 0.2), (4, 0.8), (8, 0.4), (16, 0.2)]  # (time, value) pairs
-)
+# Example: Automate filter cutoff (Currently non-functional)
+# automate_parameter(
+#     track_index=1,
+#     plugin_index=0,
+#     parameter_index=12,  # Cutoff parameter
+#     points=[(0, 0.2), (4, 0.8), (8, 0.4), (16, 0.2)]  # (time, value) pairs
+# )
 ```
 
 ### Arrangement Control
 
-Control the pattern sequence and looping:
-
+**(Note: `set_arrangement` is currently non-functional)**
 ```python
-# Set up a pattern sequence with loop points
-set_arrangement(
-    pattern_sequence=[0, 1, 2, 3],
-    loop_start=0,
-    loop_end=4
-)
+# Example: Set up a pattern sequence with loop points (Currently non-functional)
+# set_arrangement(
+#     pattern_sequence=[0, 1, 2, 3],
+#     loop_start=0,
+#     loop_end=4
+# )
 ```
 
 ### Enhanced Status Feedback
 
-Get detailed status information from FL Studio:
-
+**(Note: `get_status` is currently non-functional)**
 ```python
-# Get current status (tempo, playback state, etc.)
-status = get_status()
-print(f"Current tempo: {status['data']['tempo']} BPM")
-print(f"Playing: {status['data']['playing']}")
+# Example: Get current status (tempo, playback state, etc.) (Currently non-functional)
+# status = get_status()
+# print(f"Current tempo: {status['data']['tempo']} BPM")
+# print(f"Playing: {status['data']['playing']}")
 ```
 
 ## API Reference
 
 ### Basic Commands (CC-based)
 
-| Command | Description |
-|---------|-------------|
-| `play_note(note, velocity, duration)` | Play a single MIDI note |
-| `create_track(name, track_type)` | Create a new track |
-| `load_instrument(instrument_name, channel)` | Load an instrument |
-| `set_tempo(bpm)` | Set the project tempo |
-| `control_transport(action)` | Control playback (play/stop/record) |
-| `select_pattern(pattern)` | Select a pattern by number |
-| `set_mixer_level(track, level)` | Set mixer track volume |
-| `select_channel(channel)` | Select a channel in the Channel Rack |
-| `add_audio_effect(track, effect_type)` | Add an audio effect to a mixer track |
+| Command | Description | Status |
+|---------|-------------|--------|
+| `create_notes(clear=False)` | Create/clear notes (Implementation unclear) | ❌ Not Working |
+| `play_note(note, velocity, duration)` | Play a single MIDI note | ✅ Working |
+| `create_track(name, track_type)` | Create a new track | ❌ Not Working |
+| `load_instrument(instrument_name, channel)` | Load an instrument | ❌ Not Working |
+| `set_tempo(bpm)` | Set the project tempo | ❌ Not Working |
+| `control_transport(action)` | Control playback (play/stop/record) | ✅ Working |
+| `select_pattern(pattern)` | Select a pattern by number | ✅ Working |
+| `set_mixer_level(track, level)` | Set mixer track volume | ❌ Not Working |
+| `select_channel(channel)` | Select a channel in the Channel Rack | ❌ Not Working |
+| `add_audio_effect(track, effect_type)` | Add an audio effect to a mixer track | ✅ Working |
+| `add_midi_effect(track, effect_type)` | Add a MIDI effect (Implementation unclear) | ❌ Not Working |
 
 ### Advanced Commands (SysEx-based)
 
-| Command | Description |
-|---------|-------------|
-| `create_chord_progression(progression, duration_beats, channel, velocity)` | Create a chord progression |
-| `create_melody(scale, length, channel, velocity, seed)` | Generate a melody based on a scale |
-| `automate_parameter(track_index, plugin_index, parameter_index, points)` | Automate a plugin parameter |
-| `set_arrangement(pattern_sequence, loop_start, loop_end)` | Set the pattern sequence and loop points |
-| `get_status()` | Get detailed project status |
+| Command | Description | Status |
+|---------|-------------|--------|
+| `create_chord_progression(progression, duration_beats, channel, velocity)` | Create a chord progression | ❌ Not Working |
+| `create_melody(scale, length, channel, velocity, seed)` | Generate a melody based on a scale | ❌ Not Working |
+| `automate_parameter(track_index, plugin_index, parameter_index, points)` | Automate a plugin parameter | ❌ Not Working |
+| `set_arrangement(pattern_sequence, loop_start, loop_end)` | Set the pattern sequence and loop points | ❌ Not Working |
+| `get_status()` | Get detailed project status | ❌ Not Working |
 
 ## Supported Chords
 
@@ -240,21 +261,22 @@ chorus = ["C", "G", "Am", "F"]
 create_chord_progression(verse, duration_beats=4, channel=0)
 
 # Create chorus
-select_pattern(1)  # Move to next pattern
+select_pattern(1)  # Move to next pattern (✅ Working)
 create_chord_progression(chorus, duration_beats=4, channel=0)
 
-# Set arrangement
-set_arrangement([0, 0, 1, 1, 0, 1, 1, 1], loop_start=0, loop_end=8)
+# Set arrangement (Note: set_arrangement is currently non-functional)
+# set_arrangement([0, 0, 1, 1, 0, 1, 1, 1], loop_start=0, loop_end=8)
 ```
 
 ### Generating Lead Melodies Over Chord Progressions
 
+**(Note: `create_melody` is currently non-functional)**
 ```python
 # Create chord progression
 create_chord_progression(["C", "G", "Am", "F"], duration_beats=4, channel=0)
 
-# Create compatible melody on another channel
-create_melody(scale="C major", length=16, channel=1)
+# Create compatible melody on another channel (Currently non-functional)
+# create_melody(scale="C major", length=16, channel=1)
 ```
 
 ## Troubleshooting
@@ -279,14 +301,14 @@ create_melody(scale="C major", length=16, channel=1)
 
 ## Known Limitations
 
-- **Piano roll editing**: Due to FL Studio's API limitations, some piano roll operations might not produce perfect results
-- **Plugin automation**: Some parameters might not be automatable depending on the plugin
-- **Real-time feedback**: There might be a slight delay in feedback from FL Studio
-- **Complex arrangements**: Very large pattern sequences might require breaking into smaller chunks
+- **Feature Status**: Several core features are currently non-functional (see "Current Status" section and API tables).
+- Notes can be played as well as chords, but setting BPM does not work and neither does loading instruments or audio effects.
 
 ## Future Enhancements
 
-- **Machine learning-based melody generation**: Implementation of ML models for more musical melodies
-- **Audio analysis feedback**: Integration with audio analysis for more intelligent automation
-- **Template support**: Save and load creative templates for quick composition
-- **Multi-device support**: Coordination with other MIDI controllers
+- **Stabilize Core Features**: Prioritize fixing the non-functional commands.
+- **Plugin Scanning & Validation**: Implement a system to scan the user's installed VST/AU generators and effects. This would allow for validating `load_instrument` and `add_audio_effect` calls against available plugins, improving reliability.
+- **Machine learning-based melody generation**: Implementation of ML models for more musical melodies (dependent on fixing `create_melody`).
+- **Audio analysis feedback**: Integration with audio analysis for more intelligent automation (dependent on fixing `automate_parameter` and `get_status`).
+- **Template support**: Save and load creative templates for quick composition.
+- **Multi-device support**: Coordination with other MIDI controllers.

@@ -151,7 +151,7 @@ def create_track(name: str = "New Track", track_type: str = "instrument") -> Dic
         return {"status": "error", "message": str(e)}
 
 @mcp.tool()
-def load_instrument(instrument_name: str, channel: int = None) -> Dict[str, Any]:
+def load_instrument(instrument_name: str, channel: Optional[int] = None) -> Dict[str, Any]:
     """Load an instrument into the selected or specified channel."""
     try:
         # Map instrument name to type
