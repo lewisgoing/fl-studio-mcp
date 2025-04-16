@@ -5,15 +5,15 @@
 Enhanced FL Studio MCP Integration Controller
 """
 
-import midi  # type: ignore
-import channels  # type: ignore
-import patterns  # type: ignore
-import transport  # type: ignore
-import mixer  # type: ignore
-import plugins  # type: ignore
-import ui  # type: ignore
-import device  # type: ignore
-import general  # type: ignore
+import midi
+import channels
+import patterns
+import transport
+import mixer
+import plugins
+import ui
+import device
+import general
 import time
 import json
 
