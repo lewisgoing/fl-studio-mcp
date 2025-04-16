@@ -316,33 +316,44 @@ class MCPController:
         # Store the last command for debugging
         self.log(f"Processing command type {cmd_type} with params {params}")
 
+        # ===== CONTENT CREATION COMMANDS =====
         if cmd_type == 1: # Create or clear notes
             return self.cmd_create_notes(params)
+        elif cmd_type == 8: # Create chord progression
+            return self.cmd_create_chord_progression(params)
+            
+        # ===== TRACK AND CHANNEL MANAGEMENT COMMANDS =====
         elif cmd_type == 2: # Create track
             return self.cmd_create_track(params)
         elif cmd_type == 3: # Load instrument
             return self.cmd_load_instrument(params)
+            
+        # ===== TRANSPORT CONTROL COMMANDS =====
         elif cmd_type == 4: # Set tempo
-            return self.set_tempo(bpm)
-        elif cmd_type == 5: # Transport control
+            return self.set_tempo(params)  # Fix: Pass params instead of undefined bpm
+        elif cmd_type == 5: # Transport control (play, stop, record)
             return self.cmd_transport_control(params)
         elif cmd_type == 6: # Select pattern
             return self.cmd_select_pattern(params)
+            
+        # ===== MIXER OPERATION COMMANDS =====
         elif cmd_type == 7: # Set mixer level
             return self.cmd_set_mixer_level(params)
-        elif cmd_type == 8: # Create chord progression
-            return self.cmd_create_chord_progression(params)
+            
+        # ===== EFFECTS COMMANDS =====
         elif cmd_type == 9: # Add MIDI effect
             return self.cmd_add_midi_effect(params)
         elif cmd_type == 10: # Add audio effect
             return self.cmd_add_audio_effect(params)
+            
+        # ===== VISUAL/UI COMMANDS =====
         elif cmd_type == 11: # Randomize channel colors
             return self.cmd_randomize_colors(params)
         else:
             self.log(f"Unknown command type: {cmd_type}")
             return {"error": f"Unknown command type: {cmd_type}"}
 
-    # Command implementations
+    # ===== CONTENT CREATION COMMANDS =====
     def cmd_create_notes(self, params):
         """Create or clear notes in the selected channel"""
         try:
@@ -370,84 +381,19 @@ class MCPController:
             self.log(f"Error in create_notes: {str(e)}")
             return {"error": str(e)}
 
-    def cmd_create_track(self, params):
-        """Create a new track in FL Studio"""
-        try:
-            # Get parameters
-            track_type = params.get("action", 0) # 0=instrument, 1=audio, 2=automation
+    def cmd_create_chord_progression(self, params):
+        """Create a chord progression in the selected channel"""
+        # This would need a complex implementation to translate chord types to actual notes
+        # and create proper MIDI data in FL Studio
+        self.log("Chord progression command received - requires direct note events")
+        return {"success": False, "message": "Chord progressions require direct note events"}
 
-            # FL Studio's channel creation process
-            channel_index = channels.channelCount()
-            if channel_index >= 125: # FL Studio's limit
-                return {"error": "Maximum number of channels reached"}
-
-            # Add a channel to the channel rack
-            channels.addChannel(track_type == 1) 
-
-            # Set the name based on type
-            name = "Audio" if track_type == 1 else "Automation" if track_type == 2 else "Instrument"
-            channels.setChannelName(channel_index, f"{name} {channel_index}")
-
-            # Select the new channel
-            channels.selectOneChannel(channel_index)
-            self.state["selected_channel"] = channel_index
-            self.state["last_created_channel"] = channel_index
-
-            # Create a matching mixer track and link
-            mixer_index = mixer.trackCount() - 1 # Leave master track alone
-            if mixer_index < 125:
-                mixer.setTrackName(mixer_index, f"{name} {channel_index}")
-                # Link the channel to this mixer track
-                channels.setTargetFxTrack(channel_index, mixer_index)
-
-            self.log(f"Created new {name} track - channel: {channel_index}, mixer: {mixer_index}")
-            return {"success": True, "channel": channel_index, "mixer": mixer_index, "type": name}
-        except Exception as e:
-            self.log(f"Error in create_track: {str(e)}")
-            return {"error": str(e)}
-
-    def cmd_load_instrument(self, params):
-        """Load an instrument into a channel"""
-        try:
-            # Get parameters
-            instrument_type = params.get("instrument", 0)
-            channel = params.get("track", self.state["selected_channel"])
-
-            # Make sure we're working with a valid channel
-            if channel >= channels.channelCount():
-                return {"error": f"Invalid channel: {channel}"}
-
-            # Select the channel
-            channels.selectOneChannel(channel)
-            self.state["selected_channel"] = channel
-
-            # Define instruments and their potential replacements
-            instrument_map = {
-                0: "FL Keys", # Default
-                1: "FPC",     # Piano
-                2: "BooBass", # Bass
-                3: "FPC",     # Drum
-                4: "Sytrus"   # Synth
-            }
-            instrument_name = instrument_map.get(instrument_type, "FL Keys")
-
-            # Find the plugin index for the instrument
-            plugin_index = plugins.find(instrument_name)  
-            if plugin_index == -1:
-                self.log(f"Instrument '{instrument_name}' not found. Defaulting to FL Keys.")
-                plugin_index = plugins.find("FL Keys")  
-                if plugin_index == -1:
-                    return {"error": "Could not find default instrument 'FL Keys'"}
-
-            # Replace the current instrument (if it's a generator)
-            if channels.channelType(channel) == midi.CT_GenPlug:  
-                channels.replace(channel, plugin_index)  
-                self.log(f"Loaded '{instrument_name}' into channel {channel}")
-                return {"success": True, "channel": channel, "instrument": instrument_name}
-        except Exception as e:
-            self.log(f"Error in load_instrument: {str(e)}")
-            return {"error": str(e)}
-        
+    # ===== TRACK AND CHANNEL MANAGEMENT COMMANDS =====
+    # add generator function: todo
+    
+    
+    
+    # ===== TRANSPORT/GLOBAL CONTROL COMMANDS =====
     def get_current_tempo(self):
         """Get the current project tempo in BPM"""
         try:
@@ -459,13 +405,7 @@ class MCPController:
             return 120  # Default fallback
 
     def set_tempo(self, bpm):
-        """
-        Change the tempo in FL Studio to the specified BPM value
-        
-        Args:
-            bpm (float or dict): The desired tempo in beats per minute,
-                                or a params dictionary with 'pattern' key
-        """
+        """Change the tempo in FL Studio to the specified BPM value"""
         # Handle both direct BPM value and params dictionary
         if isinstance(bpm, dict):
             # This is a params dictionary from MIDI
@@ -493,6 +433,86 @@ class MCPController:
         # Return success
         return {"success": True, "bpm": bpm_value}
     
+
+    def set_main_volume(self, volume):
+        """Set the main volume in FL Studio
+        
+        Args:
+            volume (float, int, or dict): Volume level can be:
+                                - Float between 0.0 (0%) and 1.25 (125%)
+                                - Integer between 0 and 125 (representing percentage)
+                                - A params dictionary with 'value' key
+        """
+        try:
+            # Handle both direct volume value and params dictionary
+            if isinstance(volume, dict):
+                # Convert from MIDI range (0-127) to 0-125% range
+                volume_value = volume.get("value", 0) / 102.4  # 127/1.25 ≈ 102.4
+            else:
+                # Convert to float
+                volume_value = float(volume)
+                
+                # If value is likely a percentage (greater than 1.25),
+                # convert it to decimal format (e.g., 25 -> 0.25)
+                if volume_value > 1.25:
+                    volume_value = volume_value / 100.0
+            
+            # Ensure volume is in valid range 0.0-1.25 (0-125%)
+            volume_value = max(0.0, min(1.25, volume_value))
+            
+            # FL Studio seems to use a range that doesn't map linearly
+            # For 0-125%, the effective range appears to be 0x0000-0xFFFF (0-65535)
+            # But main volume uses a specific scale
+            
+            print(f"Setting main volume to {volume_value}")
+            
+            # Map 0.0-1.25 to 0-16384 (FL Studio's apparent scaling)
+            # Adjust scaling factor to compensate for observed 2% error
+            internal_value = int(volume_value * 12845.1)  # Adjusted from 13107.2 (reduced by ~2%)
+            
+            print(f"Setting main volume to {internal_value}")
+            
+            # Use processRECEvent to set the main volume
+            general.processRECEvent(
+                midi.REC_MainVol,
+                internal_value,
+                midi.REC_Control | midi.REC_UpdateValue | midi.REC_UpdateControl | midi.REC_ShowHint
+            )
+            
+            self.log(f"Set main volume to {volume_value:.2f} ({int(volume_value * 100)}%)")
+            return {"success": True, "volume": volume_value, "percent": int(volume_value * 100)}
+        except Exception as e:
+            self.log(f"Error setting main volume: {str(e)}")
+            return {"error": str(e)}
+    
+    def get_main_volume(self):
+        """Get the current main volume level in FL Studio
+        
+        Returns:
+            float: Current main volume as normalized value (0.0-1.25, representing 0-125%)
+        """
+        try:
+            # Get the current main volume value
+            internal_value = general.processRECEvent(
+                midi.REC_MainVol,
+                0,  # Value isn't used when just getting
+                midi.REC_GetValue
+            )
+            
+            # Convert from internal value to 0.0-1.25 range
+            if internal_value < 0:
+                return 0.0
+                
+            # Reverse the mapping: internal → 0.0-1.25
+            normalized_value = internal_value / 13107.2
+            
+            # Format for display
+            self.log(f"Current main volume: {normalized_value:.2f} ({int(normalized_value * 100)}%)")
+            return normalized_value
+        except Exception as e:
+            self.log(f"Error getting main volume: {str(e)}")
+            return 0.0  # Default fallback
+
     def cmd_transport_control(self, params):
         """Control transport (play, stop, record)"""
         try:
@@ -527,7 +547,7 @@ class MCPController:
             return {"error": str(e)}
 
     def cmd_select_pattern(self, params):
-        """Select a pattern"""
+        """Select a pattern in the playlist"""
         try:
             # Get parameters
             pattern = params.get("pattern", 0)
@@ -548,8 +568,10 @@ class MCPController:
             self.log(f"Error in select_pattern: {str(e)}")
             return {"error": str(e)}
 
+
+    # ===== MIXER OPERATION COMMANDS =====
     def cmd_set_mixer_level(self, params):
-        """Set mixer track volume level"""
+        """Set level for a mixer track"""
         try:
             # Get parameters
             track = params.get("track", 0)
@@ -567,20 +589,8 @@ class MCPController:
             self.log(f"Error in set_mixer_level: {str(e)}")
             return {"error": str(e)}
 
-    def cmd_create_chord_progression(self, params):
-        """Create a chord progression (placeholder - needs complex implementation)"""
-        # This would need a complex implementation to translate chord types to actual notes
-        # and create proper MIDI data in FL Studio
-        self.log("Chord progression command received - requires direct note events")
-        return {"success": False, "message": "Chord progressions require direct note events"}
+    # ===== EFFECTS COMMANDS =====
 
-    def cmd_add_midi_effect(self, params):
-        """Add a MIDI effect to a channel"""
-        # Implementation would depend on available MIDI effects
-        self.log("Add MIDI effect command received")
-        return {"success": False, "message": "MIDI effect addition not yet implemented"}
-
-    def cmd_add_audio_effect(self, params):
         """Add an audio effect to a mixer track"""
         try:
             # Get parameters
@@ -637,8 +647,9 @@ class MCPController:
             self.log(f"Error in add_audio_effect: {str(e)}")
             return {"error": str(e)}
 
+    # ===== VISUAL/UI COMMANDS =====
     def cmd_randomize_colors(self, params):
-        """Randomize channel colors"""
+        """Randomize channel colors in the channel rack"""
         try:
             # Get parameters
             selected_only = params.get("value", 0) > 0
