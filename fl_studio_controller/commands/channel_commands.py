@@ -131,15 +131,15 @@ def deselectAllChannels():
 
 # --- Channel Properties (Name, Color) ---
 
-def getChannelName(index):
+def get_channel_name(index):
     """Gets the name of the channel at the group index."""
     return channels.getChannelName(index, useGlobalIndex=False)
 
-def getChannelNames():
+def get_channel_names():
     """Gets the names of all channels in the current group."""
     names = []
     for i in range(getChannelCount()):
-        names.append(getChannelName(i))
+        names.append(get_channel_name(i))
     return names
 
 def setChannelName(index, name):
@@ -150,7 +150,7 @@ def getSelectedChannelName():
     """Gets the name of the first selected channel."""
     idx = getCurrentChannelIndex()
     if idx >= 0:
-        return getChannelName(idx)
+        return get_channel_name(idx)
     return "" # Or raise error, depending on desired behavior
 
 def setSelectedChannelName(name):

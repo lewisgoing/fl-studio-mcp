@@ -100,7 +100,7 @@ class MCPController:
         try:
             if device.isAssigned():
                 # Convert data to a simple string and send as SysEx
-                message = json.dumps(data)[:100] # Limit length for safety
+                message = json.dumps(data)
                 encoded = [ord(c) for c in message]
                 # Create SysEx message with header F0 00 01 (custom header) and end with F7
                 sysex_data = bytearray([0xF0, 0x00, 0x01] + encoded + [0xF7])
@@ -285,10 +285,37 @@ class MCPController:
             return {"error": "Add MIDI effect command not implemented"}
         elif cmd_type == 10: # Add audio effect
             return mixer_commands.cmd_add_audio_effect(params)
-            
+
         # ===== VISUAL/UI COMMANDS =====
         elif cmd_type == 11: # Randomize channel colors
             return visual_commands.cmd_randomize_colors(params)
+        elif cmd_type == 12: # Get all channel names
+            try:
+                names = []
+                count = channels.channelCount() # Use the *real* FL API
+                for i in range(count):
+                    # Use the function from channel_commands or call FL API directly
+                    names.append(channel_commands.get_channel_name(i)) 
+                    # Or directly: names.append(channels.getChannelName(i))
+                self.log(f"Sending channel names: {names}")
+                # Use send_feedback to send data back via SysEx
+                return {"status": "success", "names": names} 
+            except Exception as e:
+                self.log(f"Error getting channel names: {str(e)}")
+                return {"status": "error", "message": str(e)}
+        elif cmd_type == 13: # Get specific channel name (example)
+            try:
+                index = params.get("track", -1) 
+                if 0 <= index < channels.channelCount():
+                    name = channel_commands.get_channel_name(index)
+                    # Or directly: name = channels.getChannelName(index)
+                    self.log(f"Sending channel name for index {index}: {name}")
+                    return {"status": "success", "index": index, "name": name}
+                else:
+                    return {"status": "error", "message": f"Invalid channel index: {index}"}
+            except Exception as e:
+                self.log(f"Error getting channel name for index {params.get('track', -1)}: {str(e)}")
+                return {"status": "error", "message": str(e)}
         else:
             self.log(f"Unknown command type: {cmd_type}")
             return {"error": f"Unknown command type: {cmd_type}"}

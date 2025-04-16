@@ -7,13 +7,14 @@ wheels/
 *.egg-info
 
 # Virtual environments
-# venv
+.venv
 .DS_Store
 .DS_Store
 flstudio_mcp_iac/.DS_Store
 .mypy_cache
 .vscode
 uv.lock
+docs
 
 # Test Artifacts
 .pytest_cache/
@@ -25,7 +26,11 @@ uv.lock
 .env
 .env.*
 
+new/*
+
 # Log Files
 *.log
 
 docs/*
+.DS_Store
+flstudio_mcp_iac/.DS_Store
