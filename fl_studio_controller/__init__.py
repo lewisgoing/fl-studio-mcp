@@ -10,5 +10,5 @@ from device_FLStudioMCPController import (
     RandomizeAllChannelColors, RandomizeSelectedChannelColors,
     AnimationSetup, NextAnimationFrame, RunSmoothAnimation, StopSmoothAnimation,
     RainbowPattern, ColorGroups, RandomColors, ColorByType, GradientPreset,
-    GetCurrentChannelIndex, GetChannelCount, RunTests
+    RunTests
 ) 

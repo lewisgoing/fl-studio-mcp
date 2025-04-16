@@ -2,9 +2,14 @@
     "mypy-type-checker.cwd": "${workspaceFolder}",
     "mypy-type-checker.reportingScope": "workspace",
     "mypy-type-checker.interpreter": [
-        "/Users/lewisgoing/LocalDev/flstudio-mcp-iac/.venv/bin/python"
+        "/Users/lewisgoing/Image-Line/FL Studio/Settings/Hardware/flstudio-mcp-iac/.venv/bin/python"
     ],
     "mypy-type-checker.path": [
-        "/Users/lewisgoing/LocalDev/flstudio-mcp-iac/.venv/bin/mypy"
+        "/Users/lewisgoing/Image-Line/FL Studio/Settings/Hardware/flstudio-mcp-iac/.venv/bin/mypy"
+    ],
+    "mypy-type-checker.preferDaemon": true,
+    "mypy-type-checker.importStrategy": "useBundled",
+    "mypy-type-checker.args": [
+        "--ignore-missing-imports"
     ]
 }

@@ -21,13 +21,13 @@ import math
 import arrangement
 
 # Import command modules
-from commands import channel_commands
-from commands import transport_commands
-from commands import mixer_commands
-from commands import visual_commands
+from fl_studio_controller.commands import channel_commands
+from fl_studio_controller.commands import transport_commands
+from fl_studio_controller.commands import mixer_commands
+from fl_studio_controller.commands import visual_commands
 
 # Import testing module
-from testing.test_suite import TestSuite
+from fl_studio_controller.testing.test_suite import TestSuite
 
 # Constants
 DEBUG = True
