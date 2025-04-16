@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+# venv
 .DS_Store
 .DS_Store
 flstudio_mcp_iac/.DS_Store
